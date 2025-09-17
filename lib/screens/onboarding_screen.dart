@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'resonant_melody.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -29,6 +31,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       icon: Icons.playlist_play,
       title: "Create Playlists",
       description: "Curate the perfect soundtrack for every moment",
+    ),
+    OnboardingPage(
+      icon: Icons.folder_open, 
+      title: "Access Your Music",
+      description: "We need permission to access your music files to create your library",
     ),
     OnboardingPage(
       icon: Icons.supervised_user_circle_rounded,
@@ -91,6 +98,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 textAlign: TextAlign.center,
               ),
               if (_currentPage == 3) ...[
+                const SizedBox(height: 40),
+                ElevatedButton(
+                  onPressed: _requestStoragePermission,
+                  child: const Text("Grant Permission"),
+                ),
+              ],
+              if (_currentPage == 4) ...[
                 const SizedBox(height: 40),
                 TextField(
                   controller: _nameController,
@@ -181,6 +195,72 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
       ),
     );
+  }
+
+  Future<void> _requestStoragePermission() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+    
+    Permission permissionToRequest;
+    
+    if (androidInfo.version.sdkInt >= 33) {
+      permissionToRequest = Permission.audio;
+    } else {
+      permissionToRequest = Permission.storage;
+    }
+    
+    final status = await permissionToRequest.request();
+    
+    if (status.isGranted) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeIn,
+      );
+    } else if (status.isDenied) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Permission Required"),
+          content: Text(androidInfo.version.sdkInt >= 33 
+            ? "Please allow access to Music and Audio files in the next screen."
+            : "Please allow storage access in the next screen."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await openAppSettings();
+              },
+              child: const Text("Settings"),
+            ),
+          ],
+        ),
+      );
+    } else if (status.isPermanentlyDenied) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Permission Denied"),
+          content: const Text("Please enable the permission manually in Settings > Apps > Resonant Melody > Permissions"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await openAppSettings();
+              },
+              child: const Text("Settings"),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
